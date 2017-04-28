@@ -1,0 +1,60 @@
+import tensorflow as tf
+from PIL import Image
+import os
+import pandas as pd
+from tqdm import tqdm
+import numpy as np
+
+def _int64_feature(value):
+  return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
+
+
+def _bytes_feature(value):
+  return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
+
+
+def convert_to(data_dir, name):
+  """Converts a dataset to tfrecords."""
+  # filenames = []
+  # for rt,dirs,files in os.walk(data_dir):
+  #   for file in files:
+  #     filenames.append(os.path.join(rt,file))
+
+  filename = os.path.join("D:\\kaggle_plane", name + '.tfrecords')
+  print('Writing', filename)
+  writer = tf.python_io.TFRecordWriter(filename)
+
+  train_files = []
+  train_labels = []
+
+  df = pd.read_csv("D:\\kaggle_plane\\input\\train.csv")
+  flatten = lambda l: [item for sublist in l for item in sublist]
+  labels = list(set(flatten([l.split(' ') for l in df['tags'].values])))
+
+  label_map = {l: i for i, l in enumerate(labels)}
+  inv_label_map = {i: l for l, i in label_map.items()}
+
+  for f, tags in tqdm(df.values, miniters=1000):
+    targets = np.zeros(17)
+    for t in tags.split(' '):
+        targets[label_map[t]] = 1 
+    train_files.append(f)
+    train_labels.append(targets)
+
+  for index in range(len(train_files)):
+    image = Image.open(os.path.join(data_dir,train_files[index])+'.jpg')
+    rows = image.height
+    cols = image.width
+    depth = 3
+    image_raw = image.tobytes()
+    """label have to be int64 so it doesnt support multi-labels classify"""
+    example = tf.train.Example(features=tf.train.Features(feature={
+        'height': _int64_feature(rows),
+        'width': _int64_feature(cols),
+        'depth': _int64_feature(depth),
+        'label': _int64_feature(label),
+        'image_raw': _bytes_feature(image_raw)}))
+    writer.write(example.SerializeToString())
+  writer.close()
+
+convert_to("D:\\kaggle_plane\\train-jpg", "train")
